@@ -1,0 +1,3 @@
+grep -E "^<1>[^I]*II[AB]?$" enzymes.txt
+awk '/<1>[^I]*II[AB]?$/{nr[NR+2]};NR in nr' enzymes.txt | sort | uniq -c | sort -r
+cat enzymes.txt | python connectivity.py 2> connectivity.log
