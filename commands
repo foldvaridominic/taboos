@@ -1,3 +1,18 @@
+#!/bin/bash
+
+# look for type II enzymes --> actually this regex cannot be applied
 grep -E "^<1>[^I]*II[AB]?$" enzymes.txt
+
+# list all organisms with type II enzymes
 awk '/<1>[^I]*II[AB]?$/{nr[NR+2]};NR in nr' enzymes.txt | sort | uniq -c | sort -r
+
+# how many restriction sites with more than X wildcard character
+cat enzymes.txt | grep "<5>" | awk -FN -vcount=4 'NF>count' | wc -l
+
+# check whether all organisms made into the output file
+cat enzymes.txt | grep "<3>" | sed 's/<3>//g' | sort | uniq > temp
+grep -F -f temp connectivity.log | awk -F name: '{print $2}' | awk -F "|" '{print $1}' | sed 's/^\s*//g' | sed 's/\s*$//g' > temp2
+grep -v -F -f temp2 temp
+
+# run the program
 cat enzymes.txt | python connectivity.py 2> connectivity.log

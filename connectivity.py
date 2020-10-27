@@ -92,7 +92,7 @@ class TabooSet:
         return False
 
 
-def run(organism_regex, enzyme_regex, rsite_regex):
+def run(organism_regex, enzyme_regex, rsite_regex, max_wildcard):
 
     idx=0
     start_time = time.time()
@@ -108,18 +108,21 @@ def run(organism_regex, enzyme_regex, rsite_regex):
     for line in sys.stdin:
         name_match = re_organism.search(line)
         enzyme_match = re_enzyme.search(line)
+        #XXX consider all entries as type 2 for now
+        # current regex cannot be applied
+        enzyme_match = True
         rsite_match = re_rsite.search(line)
 
         if enzyme_match:
             collect = True
-        elif name_match and organism is None:
+        if name_match and organism is None:
             organism = name_match.group('name')
-        elif data and collect and name_match and not name_match.group('name') == organism:
+        if collect and name_match and not name_match.group('name') == organism:
             idx += 1
             ts = TabooSet(data, idx)
             connected = ts.connected
-            logger.info("%s | %s | taboo count: %s | %s", idx, organism, len(ts.taboo_strings),
-                'not' if not connected else '' + 'connected')
+            logger.info("idx: %s | name: %s | taboo count: %s | %s", idx, organism, len(ts.taboo_strings),
+                'not connected' if not connected else 'connected')
             organism = name_match.group('name')
             data = []
             if not connected:
@@ -127,7 +130,7 @@ def run(organism_regex, enzyme_regex, rsite_regex):
         elif rsite_match and collect:
             restriction_site = rsite_match.group('nucleotides')
             #XXX but lot of N's cause memory error, we could of course enumerate them on the fly
-            if sum(1 for i in restriction_site if i == SPECIAL_CHARACTER_N) <= 4:
+            if sum(1 for i in restriction_site if i == SPECIAL_CHARACTER_N) <= max_wildcard:
                 data.append(restriction_site)
             collect = False
 
@@ -136,7 +139,7 @@ def run(organism_regex, enzyme_regex, rsite_regex):
         idx += 1
         ts = TabooSet(data, idx)
         connected = ts.connected
-        logger.info("%s | %s | taboo count: %s | %s", idx, organism, len(ts.taboo_strings),
+        logger.info("idx: %s | name: %s | taboo count: %s | %s", idx, organism, len(ts.taboo_strings),
             'not' if not connected else '' + 'connected')
 
     logger.info("progress: %d", idx)
@@ -167,6 +170,9 @@ cat input.txt | python connectivity.py
         '--rsite-regex', default='<5>(?P<nucleotides>.*)',
         )
     parser.add_argument(
+        '--max-wildcard', default=4, type=int,
+        )
+    parser.add_argument(
         '--log-level', default='DEBUG',
         )
     args = parser.parse_args()
@@ -178,4 +184,4 @@ cat input.txt | python connectivity.py
     ch.setLevel(args.log_level)
     logger.addHandler(ch)
 
-    run(args.organism_regex, args.enzyme_regex, args.rsite_regex)
+    run(args.organism_regex, args.enzyme_regex, args.rsite_regex, args.max_wildcard)
