@@ -57,15 +57,16 @@ class TabooSet:
 
     @property
     def connected_2(self):
-        sorted_taboos = set(sorted([t[1:] for t in self.taboos], key=len, reverse=True))
-        pairs = list(itertools.combinations(sorted_taboos, 2))
+        sorted_taboos = set(sorted([t[1:] for t in self.taboo_strings], key=len, reverse=True))
+        pairs = [(p1, p2) for p1, p2 in itertools.combinations(sorted_taboos, 2)
+            if p1 not in self.taboo_strings and p2 not in self.taboo_strings]
         #logger.debug("Taboo pairs: %s", pairs)
         pairs_filtered = [p for p in pairs if sum(1 for t1,t2 in zip(*p) if t1 != t2) <= 1]
         logger.debug("Taboo pairs filtered: %s", pairs_filtered)
         for pair in pairs_filtered:
             for idx, letter in enumerate(NUCLEOTIDE_CHARACTERS, 1):
-                first = letter + ''.join(pair[0])
-                second = letter + ''.join(pair[1])
+                first = letter + pair[0]
+                second = letter + pair[1]
                 if all(t not in first and t not in second for t in self.taboo_strings):
                     break
                 else:
