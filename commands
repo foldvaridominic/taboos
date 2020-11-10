@@ -1,18 +1,23 @@
 #!/bin/bash
 
-# look for type II enzymes --> actually this regex cannot be applied
-grep -E "^<1>[^I]*II[AB]?$" enzymes.txt
-
-# list all organisms with type II enzymes
+# list and count all organisms with type II RM enzymes
 awk '/<1>[^I]*II[AB]?$/{nr[NR+2]};NR in nr' enzymes.txt | sort | uniq -c | sort -r
+grep -E -A2 '^ET\s+RM2' bairoch.txt | grep -E '^OS'| sort | uniq -c | sort -r
+
+# organisms with unknown RM II enzymes
+grep -E -A4 '^ET\s+RM2' bairoch.txt | grep -E -B2 '^RS\s+[?]' | grep -E '^OS'| sort | uniq -c | sort -r
 
 # how many restriction sites with more than X wildcard character
 cat enzymes.txt | grep "<5>" | awk -FN -vcount=4 'NF>count' | wc -l
+grep -E -A4 '^ET\s+RM2' bairoch.txt | grep -E '^RS' | awk -F';' '{print $1}' | awk -FN -vcount=1 'NF>count' | wc -l
 
 # check whether all organisms made into the output file
 cat enzymes.txt | grep "<3>" | sed 's/<3>//g' | sort | uniq > temp
-grep -F -f temp connectivity.log | awk -F name: '{print $2}' | awk -F "|" '{print $1}' | sed 's/^\s*//g' | sed 's/\s*$//g' > temp2
+grep -F -f temp enzymes.log | awk -F name: '{print $2}' | sed 's/^\s*//g' | sed 's/\s*$//g' > temp2
+grep -E -A2 '^ET\s+RM2' bairoch.txt | grep -E '^OS'| sort | uniq -c | sort -r | awk -F'   ' '{print $4}' > temp
+grep name bairoch.log | awk -F name: '{print $2}' | sed 's/^\s*//g' | sed 's/\s*$//g' > temp2
 grep -v -F -f temp2 temp
 
 # run the program
-cat enzymes.txt | python connectivity.py 2> connectivity.log
+cat enzymes.txt | python3 connectivity.py --max-wildcard 4 --organism-regex '<3>(?P<name>.*)' --rsite-regex '<5>(?P<nucleotides>.*)' --enzyme-regex '.' 2> enzymes.log
+cat bairoch.txt | python3 connectivity.py 2> bairoch.log
