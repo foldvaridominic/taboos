@@ -162,9 +162,8 @@ class TabooSet:
         scs = taboo_suffixes.intersection(M_suffixes)
         lscs = set()
         for node in M_length_nodes:
-            re_node = re.compile(node)
-            lsc = list(zip(*sorted(set([(sc, re_node.match(sc).end())
-            if re_node.match(sc) else ('', 0) for sc in scs]),
+            lsc = list(zip(*sorted(set([(sc, re.match(sc, node).end())
+            if re.match(sc, node) else ('', 0) for sc in scs]),
             key=lambda x: x[1], reverse=True)))[0][0]
             lscs.add(lsc)
         sscs = scs - lscs
@@ -189,13 +188,13 @@ class TabooSet:
                 [''.join(p) for p in itertools.product(NUCLEOTIDE_CHARACTERS, repeat=partition_length)]
             partitions = [p for p in partitions if any(n.endswith(p+suffix) for n in current_nodes)]
             remaining_length = node_length - len(suffix) - partition_length
+            prefixes = {n[:remaining_length] for n in current_nodes}
             logger.debug("Partition size: %s", len(partitions))
             for i1, p1 in enumerate(partitions, 1):
                 nodes.append(p1)
                 for p2 in partitions[i1:]:
                     if sum(1 for t1,t2 in zip(p1,p2) if t1 != t2) > 1:
                         continue
-                    prefixes = {n[:remaining_length] for n in current_nodes}
                     if any(prefix+p1+suffix in current_nodes and
                         prefix+p2+suffix in current_nodes for prefix in prefixes):
                         edges.append((p1, p2))
