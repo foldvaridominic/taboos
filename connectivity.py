@@ -114,12 +114,24 @@ class TabooSet:
                 return False
         for p in self.short_suffix_classifiers:
             p_length = len(p)
-            partition_length = self.max_taboo_length - p_length
-            logger.info("Checking short suffix classifier: %s", p)
-            if not self.gen_suffix_graph(p, 2*self.max_taboo_length-1, M_length_nodes,
-                    self.max_taboo_length, quotient=True, partition_length=partition_length):
+            partition_length = max(self.min_lsc - p_length, 1)
+            break_ = False
+            while partition_length <= self.max_taboo_length - p_length:
+                prefixes = self.nodes.get(partition_length) or \
+                    itertools.product(NUCLEOTIDE_CHARACTERS, repeat=partition_length)
+                if any((''.join(pf)+p).startswith(l) and
+                    all(t not in ''.join(pf)+p for t in self.taboo_strings)
+                    for pf in prefixes for l in self.long_suffix_classifiers):
+                    break
+                partition_length += 1
+            logger.info("Checking short suffix classifier %s with partition length %s",
+                    p, partition_length)
+            n = self.max_taboo_length - 1 + partition_length + p_length
+            if not self.gen_suffix_graph(p, n, M_length_nodes,
+                    self.max_taboo_length, quotient=True,
+                    partition_length=partition_length):
                 return False
-            for length in range(p_length+2, self.max_taboo_length):
+            for length in range(p_length+2, p_length + partition_length):
                 initial_nodes = self.nodes.get(length)
                 if not initial_nodes:
                     continue
@@ -143,14 +155,14 @@ class TabooSet:
 
     def extend_nodes(self, current_nodes):
         ret = []
-        M_length = len(current_nodes[0])
+        M_length = len(current_nodes[0]) == self.max_taboo_length
         for node in current_nodes:
             ext = [NUCLEOTIDE_CHARACTERS[idx] + node
             for idx in range(ALPHABET_LENGTH)
             if all(t not in NUCLEOTIDE_CHARACTERS[idx] + node
             for t in self.taboo_strings)]
             if M_length and not ext: 
-                logger.info("Not a left proper taboo set")
+                logger.info("Not a left proper taboo set: %s", str(node))
             ret += ext
         logger.debug("extending nodes to length %s", len(current_nodes[0])+1)
         return ret
@@ -169,6 +181,7 @@ class TabooSet:
         sscs = scs - lscs
         self.long_suffix_classifiers = lscs
         self.short_suffix_classifiers = sscs
+        self.min_lsc = min(len(l) for l in lscs)
         return lscs, sscs
 
     def gen_suffix_graph(self, suffix, node_length, initial_nodes,
