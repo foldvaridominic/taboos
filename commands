@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# install requirements
+pip3 install -r ./requirements.txt
+
 # list and count all organisms with type II RM enzymes
 awk '/<1>[^I]*II[AB]?$/{nr[NR+2]};NR in nr' enzymes.txt | sort | uniq -c | sort -r
 grep -E -A2 '^ET\s+RM2' bairoch.txt | grep -E '^OS'| sort | uniq -c | sort -r
@@ -10,6 +13,7 @@ grep -E -A4 '^ET\s+RM2' bairoch.txt | grep -E -B2 '^RS\s+[?]' | grep -E '^OS'| s
 # how many restriction sites with more than X wildcard character
 cat enzymes.txt | grep "<5>" | awk -FN -vcount=4 'NF>count' | wc -l
 grep -E -A4 '^ET\s+RM2' bairoch.txt | grep -E '^RS' | awk -F';' '{print $1}' | awk -FN -vcount=1 'NF>count' | wc -l
+grep -E -A4 '^ET\s+[RM]{1,2}2' bairoch.txt | grep -E '^RS' | awk -F';' '{print $1}' | awk -FN -vcount=9 'NF>count' | wc -l
 
 # check whether all organisms made into the output file
 cat enzymes.txt | grep "<3>" | sed 's/<3>//g' | sort | uniq > temp
@@ -19,5 +23,6 @@ grep name bairoch.log | awk -F name: '{print $2}' | sed 's/^\s*//g' | sed 's/\s*
 grep -v -F -f temp2 temp
 
 # run the program
-cat enzymes.txt | python3 connectivity.py --max-wildcard 4 --organism-regex '<3>(?P<name>.*)' --rsite-regex '<5>(?P<nucleotides>.*)' --enzyme-regex '.' 2> enzymes.log
-cat bairoch.txt | python3 connectivity.py 2> bairoch.log
+cat enzymes.txt | python3 run.py --organism-regex '<3>(?P<name>.*)' --rsite-regex '<5>(?P<nucleotides>.*)' --enzyme-regex '.' 2> enzymes.log
+cat bairoch.txt | python3 run.py 2> bairoch.log
+cat bairoch.txt | python3 run.py --enzyme-regex '^ET\s+[RM]{1,2}2' 2> bairoch_M2.log
