@@ -40,7 +40,9 @@ class TabooSet:
     def transform(self, taboos, regex=False):
         ret = set()
         for t in taboos:
-            ret.add(self.generate_chars(t, regex=regex))
+            new = self.generate_chars(t, regex=regex)
+            if new:
+                ret.add(new)
         return ret
 
     def complement(self, taboos):
@@ -85,6 +87,16 @@ class TabooSet:
         return func(instance, self.taboo_strings)
 
     @property
+    def connected(self):
+        if self.connected_1:
+            logger.debug("Connected 1: %s", self.taboo_init_counts)
+            return True
+        if self.connected_2:
+            logger.debug("Connected 2")
+            return True
+        return self.connected_3()
+
+    @property
     def connected_1(self):
         return self.taboo_init_counts < ALPHABET_LENGTH
 
@@ -99,6 +111,7 @@ class TabooSet:
         pairs_filtered = [p for p in pairs if hamming_distance_1_for_tuples(p)]
         #logger.debug("Taboo pairs filtered: %s", pairs_filtered)
         logger.debug("Taboo pairs filtered count: %s", len(pairs_filtered))
+        no_left_sync = []
         for p1, p2 in pairs_filtered:
             for product1 in direct_product(p1):
                 product1_str = to_string(product1)
@@ -121,7 +134,10 @@ class TabooSet:
                         if idx == ALPHABET_LENGTH:
                             logger.debug("pair %s and %s cannot be left-1 synchronized",
                                 product1_str, product2_str)
-                            return False
+                            no_left_sync.append((product1_str, product2_str))
+                            #return False
+        if no_left_sync:
+            return False
         return True
 
     def connected_3(self):
@@ -173,6 +189,7 @@ class TabooSet:
         while starting_point < length:
             current_nodes = self.extend_nodes(current_nodes)
             starting_point += 1
+            logger.debug("extending nodes to length %s", starting_point)
             self.nodes[starting_point] = current_nodes
         return current_nodes
 
@@ -180,7 +197,7 @@ class TabooSet:
         ret = []
         try:
             M_length = len(current_nodes[0]) == self.max_taboo_length
-        except TypeError:
+        except (TypeError, IndexError):
             # initial nodes is a generator
             M_length = False
         for node in current_nodes:
@@ -190,7 +207,6 @@ class TabooSet:
             if M_length and not ext: 
                 logger.info("Not a left proper taboo set: %s", str(node))
             ret += ext
-        logger.debug("extending nodes to length %s", len(ret[0]))
         return ret
 
     def gen_suffix_classifiers(self):
@@ -257,14 +273,6 @@ class TabooSet:
             "Connected components of %s suffix graph %s with length %s: %s",
             'quotient ' + str(partition_length) if quotient else '', suffix, node_length, cc
             )
+        if cc > 1:
+            logger.info(list(nx.algorithms.components.connected_components(self.graph)))
         return cc == 1
-
-    @property
-    def connected(self):
-        if self.connected_1:
-            logger.debug("Connected 1: %s", self.taboo_init_counts)
-            return True
-        if self.connected_2:
-            logger.debug("Connected 2")
-            return True
-        return self.connected_3()

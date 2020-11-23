@@ -90,7 +90,7 @@ cat input.txt | python run.py
         '--rsite-regex', default='^RS\s+(?P<nucleotides>[^,]*),',
         )
     parser.add_argument(
-        '--max-wildcard', default=float('inf'), type=int,
+        '--max-wildcard', default=5, type=int,
         )
     parser.add_argument(
         '--log-level', default='DEBUG',
@@ -104,4 +104,5 @@ cat input.txt | python run.py
     ch.setLevel(args.log_level)
     logger.addHandler(ch)
 
+    logger.info(args)
     run(args.organism_regex, args.enzyme_regex, args.rsite_regex, args.max_wildcard)
