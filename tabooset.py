@@ -10,7 +10,7 @@ logger = logging.getLogger()
 
 
 class TabooSet:
-    def __init__(self, taboos):
+    def __init__(self, taboos, complement=True, skip=True):
         logger.info("taboo init data: %s", taboos)
         first_last_letters = set()
         for t in taboos:
@@ -20,20 +20,20 @@ class TabooSet:
         #logger.debug("first and last: %s", first_last_letters)
         self.taboo_init_counts = len(first_last_letters)
         self.taboo_strings = taboos
-        if self.taboo_init_counts >= ALPHABET_LENGTH:
+        if self.taboo_init_counts >= ALPHABET_LENGTH or not skip:
             taboo_tuples = self.transform(taboos)
             taboo_regexes = self.transform(taboos, regex=True)
             #logger.debug("transformed taboos: %s", taboo_regexes)
-            complement_tuples = self.complement(taboo_tuples)
-            complement_regexes = self.complement(taboo_regexes)
+            complement_tuples = self.complement(taboo_tuples) if complement else set()
+            complement_regexes = self.complement(taboo_regexes) if complement else set()
             #logger.debug("complement taboos: %s", complement_regexes)
             self.taboos = taboo_tuples | complement_tuples
             regexes = taboo_regexes | complement_regexes
             self.taboo_strings = {to_string(r) for r in regexes}
             logger.debug("all taboos: %s", self.taboo_strings)
             self.minimize()
-            self.max_taboo_length = max(map(len, self.taboos))
-            self.min_taboo_length = min(map(len, self.taboos))
+            self.max_taboo_length = max(map(len, self.taboos)) if self.taboos else 1
+            self.min_taboo_length = min(map(len, self.taboos)) if self.taboos else 1
             self.nodes = dict()
             self.graph = nx.Graph()
 
@@ -182,9 +182,9 @@ class TabooSet:
     def get_initial_nodes(starting_point):
         return get_self_product(NUCLEOTIDE_CHARACTERS, starting_point)
 
-    def gen_nodes_with_length(self):
+    def gen_nodes_with_length(self, length=None):
         starting_point = self.min_taboo_length - 1
-        length = self.max_taboo_length
+        length = length or self.max_taboo_length
         current_nodes = self.get_initial_nodes(starting_point)
         while starting_point < length:
             current_nodes = self.extend_nodes(current_nodes)
@@ -276,3 +276,19 @@ class TabooSet:
         if cc > 1:
             logger.info(list(nx.algorithms.components.connected_components(self.graph)))
         return cc == 1
+
+    # for testing purposes
+    @classmethod
+    def gen_hamming_graph(cls, taboos, length):
+        ts = cls(taboos, complement=False, skip=False)
+        ts.graph.clear()
+        nodes = ts.gen_nodes_with_length(length)
+        edges = combinations(nodes, 2)
+        edges = [p for p in edges if hamming_distance_1_for_strings(p)]
+        ts.graph.add_nodes_from(nodes)
+        ts.graph.add_edges_from(edges)
+        cc = list(nx.algorithms.components.connected_components(ts.graph))
+        blocks = [len(c) for c in cc]
+        logger.info("Connected components: %s", cc)
+        logger.info("Size of connected components: %s", blocks)
+        return blocks
