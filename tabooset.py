@@ -159,9 +159,11 @@ class TabooSet:
             break_ = False
             while partition_length <= self.max_taboo_length - p_length:
                 prefixes = self.gen_prefixes(length=partition_length)
-                if any((to_string(pf)+p).startswith(l) and
-                    self.taboo_free(to_string(pf)+p)
-                    for pf in prefixes for l in self.long_suffix_classifiers):
+                prefixes_filtered = [pf for pf in prefixes 
+                    if self.taboo_free(to_string(pf)+p)]
+                if all(any((to_string(pf)+p).startswith(l)
+                    for l in self.long_suffix_classifiers)
+                    for pf in prefixes_filtered):
                     break
                 partition_length += 1
             logger.info("Checking short suffix classifier %s with partition length %s",
