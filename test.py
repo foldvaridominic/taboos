@@ -1,6 +1,8 @@
 import logging
 import random
 from collections import Counter, defaultdict
+from functools import reduce
+from itertools import combinations
 
 
 logger = logging.getLogger()
@@ -49,3 +51,35 @@ def test_func(length):
     logger.info("All different block structures: %s", all_blocks)
     logger.info("Number of different block structures: %s", len(all_blocks))
     #logger.info(all_structures)
+
+
+def sigma_minus(number, alphabet_length=4):
+    return alphabet_length - number
+
+
+def flip_at(iterator, indices):
+    ret = [i for i in iterator]
+    for i in indices:
+        ret[i] = sigma_minus(ret[i])
+    return ret
+
+
+def enum_quotient_graph(dimensions, alphabet_length=4):
+    length = len(dimensions)
+    node_levels = []
+    for flip in range(length+1):
+        node_levels.append(sum(reduce(lambda x,y: x*y,  flip_at(dimensions, indices)) for indices in combinations(range(length),flip)))
+    return node_levels
+
+
+def increase_dimension(length):
+    for allowed in rec_func(length):
+        not_allowed = [letters-pos for pos in allowed]
+        taboos = []
+        for idx in range(length):
+            taboos += [to_string(s) for s in direct_product(allowed[:idx] + [not_allowed[idx]] + allowed[idx+1:])]
+        structure = tuple([len(a) for a in allowed])
+        logger.info("Taboo blocks: %s", structure)
+        for jdx in range(4):
+            blocks = TS.gen_hamming_graph(taboos, length+jdx)
+    return
