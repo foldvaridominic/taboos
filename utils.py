@@ -32,8 +32,8 @@ def hamming_distance_1_for_strings(pair):
 
 def to_string(iterable, concat=''):
     return concat.join(iterable)
- 
- 
+
+
 def taboo_free_for_strings(word, taboos):
     return all(not re.search(t, word) for t in taboos)
 

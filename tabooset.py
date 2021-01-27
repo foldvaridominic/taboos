@@ -291,6 +291,7 @@ class TabooSet:
         ts.graph.add_edges_from(edges)
         cc = list(nx.algorithms.components.connected_components(ts.graph))
         blocks = [len(c) for c in cc]
-        logger.info("Connected components: %s", cc)
-        logger.info("Size of connected components: %s", blocks)
+        #logger.info("Connected components: %s", cc)
+        #logger.info("Size of connected components: %s", blocks)
+        logger.info("Number of connected components: %s", len(blocks))
         return blocks

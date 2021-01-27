@@ -33,7 +33,7 @@ def rec_func(length):
         allowed = allowed[:-1]
 
 
-def test_func(length):
+def enum_graphs(length):
     all_blocks = set()
     all_structures = defaultdict(list)
     for allowed in rec_func(length):
@@ -72,14 +72,13 @@ def enum_quotient_graph(dimensions, alphabet_length=4):
     return node_levels
 
 
-def increase_dimension(length):
-    for allowed in rec_func(length):
-        not_allowed = [letters-pos for pos in allowed]
-        taboos = []
-        for idx in range(length):
-            taboos += [to_string(s) for s in direct_product(allowed[:idx] + [not_allowed[idx]] + allowed[idx+1:])]
-        structure = tuple([len(a) for a in allowed])
-        logger.info("Taboo blocks: %s", structure)
-        for jdx in range(4):
-            blocks = TS.gen_hamming_graph(taboos, length+jdx)
+def increase_dimension(characters, increase=4):
+    not_allowed = [letters-pos for pos in characters]
+    taboos = []
+    for idx, _ in enumerate(characters):
+        taboos += [to_string(s) for s in direct_product(characters[:idx] + [not_allowed[idx]] + characters[idx+1:])]
+    structure = tuple([len(c) for c in characters])
+    logger.info("Taboo blocks: %s", structure)
+    for jdx in range(increase):
+        blocks = TS.gen_hamming_graph(taboos, idx+1+jdx)
     return
