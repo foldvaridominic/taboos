@@ -147,10 +147,9 @@ class TabooSet:
         logger.debug("Taboo strings: %s", self.taboo_strings)
         logger.debug("LSC: %s", self.long_suffix_classifiers)
         logger.debug("SSC: %s", self.short_suffix_classifiers)
-        M_length_nodes = self.nodes[self.max_taboo_length]
         for r in self.long_suffix_classifiers:
             logger.info("Checking long suffix classifier: %s", r)
-            if not self.gen_suffix_graph(r, len(r)+self.max_taboo_length, M_length_nodes,
+            if not self.gen_suffix_graph(r, len(r)+self.max_taboo_length,
                 quotient=True, partition_length=1):
                 return False
         for p in self.short_suffix_classifiers:
@@ -169,14 +168,14 @@ class TabooSet:
             logger.info("Checking short suffix classifier %s with partition length %s",
                     p, partition_length)
             n = self.max_taboo_length - 1 + partition_length + p_length
-            if not self.gen_suffix_graph(p, n, M_length_nodes, quotient=True,
+            if not self.gen_suffix_graph(p, n, quotient=True,
                     partition_length=partition_length):
                 return False
             for length in range(p_length+2, p_length + partition_length):
                 initial_nodes = self.nodes.get(length)
                 if not initial_nodes:
                     continue
-                if not self.gen_suffix_graph(p, length, initial_nodes):
+                if not self.gen_suffix_graph(p, length, nodes=initial_nodes):
                     return False
         return True
 
@@ -186,7 +185,7 @@ class TabooSet:
 
     def gen_nodes_with_length(self, length=None):
         starting_point = self.min_taboo_length - 1
-        length = length or self.max_taboo_length
+        length = length or self.max_taboo_length + 1
         current_nodes = self.get_initial_nodes(starting_point)
         while starting_point < length:
             current_nodes = self.extend_nodes(current_nodes)
@@ -236,12 +235,9 @@ class TabooSet:
             get_self_product(NUCLEOTIDE_CHARACTERS, length)
         return prefixes
 
-    def gen_suffix_graph(self, suffix, node_length, current_nodes,
+    def gen_suffix_graph(self, suffix, node_length, nodes=None,
             quotient=False, partition_length=None):
         self.graph.clear()
-        initial_length = len(current_nodes[0])
-        if initial_length >= len(suffix):
-            current_nodes = [n for n in current_nodes if n.endswith(suffix)]
         if quotient:
             edges = []
             nodes = []
@@ -265,9 +261,9 @@ class TabooSet:
                     # reset generator 
                     prefixes = self.gen_prefixes()
         else:
-            edges = combinations(current_nodes, 2)
+            nodes = [n for n in nodes if n.endswith(suffix)]
+            edges = combinations(nodes, 2)
             edges = [p for p in edges if hamming_distance_1_for_strings(p)]
-            nodes = current_nodes
         self.graph.add_nodes_from(nodes)
         self.graph.add_edges_from(edges)
         cc = nx.algorithms.components.number_connected_components(self.graph)
