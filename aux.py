@@ -96,7 +96,6 @@ def enum_quotient_graph(characters, skip=1):
         index_groups.append([])
         for indices in combinations(range(length),idx):
             jdx += 1
-            index_groups[idx].append(jdx)
             current_characters = [c for c in characters]
             for i in indices:
                 current_characters[i] = not_allowed[i]
@@ -126,10 +125,11 @@ def overlaps(node_groups, index_groups):
     return new_node_groups, new_index_groups
 
 
-def inspect_dimension_increment_in_quotient_graph(characters, inc=1):
-    start_node_groups, start_index_groups = enum_quotient_graph(characters)
-    node_groups, index_groups = overlaps(start_node_groups, start_index_groups)
-    for s in start_node_groups:
-        logger.info(s)
+def inspect_dimension_increment_in_quotient_graph(characters, increase=1):
+    node_groups, index_groups = enum_quotient_graph(characters)
     for n in node_groups:
         logger.info(n)
+    for i in range(increase):
+        node_groups, index_groups = overlaps(node_groups, index_groups)
+        for n in node_groups:
+            logger.info(n)
