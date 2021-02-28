@@ -3,6 +3,7 @@ import random
 from collections import Counter, defaultdict
 from functools import reduce
 from itertools import combinations
+import networkx as nx
 
 
 logger = logging.getLogger()
@@ -15,7 +16,7 @@ logger.addHandler(ch)
 
 from constants import NUCLEOTIDE_CHARACTERS, ALPHABET_LENGTH
 from tabooset import TabooSet as TS
-from utils import direct_product, to_string
+from utils import *
 
 
 letters = set(NUCLEOTIDE_CHARACTERS)
@@ -133,3 +134,71 @@ def inspect_dimension_increment_in_quotient_graph(characters, increase=1):
         node_groups, index_groups = overlaps(node_groups, index_groups)
         for n in node_groups:
             logger.info(n)
+
+
+class TabooTree:
+
+    def __init__(self, alphabet, length):
+        nodes = list(get_self_product(range(alphabet), length))
+        graph = nx.Graph()  
+        graph.add_nodes_from(nodes)
+        edges = combinations(nodes, 2)
+        edges = [e for e in edges if hamming_distance_1_for_strings(e)]
+        graph.add_edges_from(edges)
+        #logger.info("Start: %s", list(graph.edges))
+        self.graph = graph
+        current_branch = [{n,} for n in nodes]
+        self.current_branch = current_branch
+        self.graph_nodes = nodes
+        self.num_states = alphabet**length
+        self.check_connected()
+
+
+    def create_new_branch(self, length, skip):
+        return [set(c) for c in combinations(self.graph_nodes, length) if not any(s <= set(c) for s in skip)]
+
+    def _create_new_branch(self):
+        new_branch = set()
+        for node in self.current_branch:
+            neighbours = self.get_neighbours(node)
+            new_branch.update(set(map(lambda x: x[1] | x[0], direct_product(([node], neighbours)))))
+        #logger.info("New branch: %s", new_branch)
+        return new_branch
+
+    def get_neighbours(self, tree_node):
+        t_node = list(tree_node)
+        size = len(tree_node)
+        candidates = [frozenset(t_node[:idx] + [n] + t_node[idx+1:]) for n in self.graph_nodes for idx in range(size)]
+        return {c for c in candidates if c in self.current_branch and c != tree_node}
+
+    def check_connected(self):
+        new_branch = self.current_branch
+        disconnected = []
+        for i in range(self.num_states-1):
+            # node in the TabooTree is a collection of nodes to be removed from the Hamming-graph
+            connected = []
+            component_sizes = defaultdict(int)
+            count = 0
+            for idx, remove_nodes in enumerate(new_branch, 1):
+                remove_edges = list(flatten([list(self.graph.edges(n)) for n in remove_nodes]))
+                #logger.info("%s Remove nodes: %s", idx, remove_nodes)
+                #logger.info("%s Remove edges: %s", idx, remove_edges)
+                self.graph.remove_edges_from(remove_edges)
+                self.graph.remove_nodes_from(remove_nodes)
+                #logger.info("%s Remaining edges: %s", idx, list(self.graph.edges))
+                cc = nx.algorithms.components.number_connected_components(self.graph)
+                components = list(nx.algorithms.components.connected_components(self.graph))
+                self.graph.add_edges_from(remove_edges)
+                if cc > 1:
+                    disconnected.append(remove_nodes)
+                    #logger.info("Taboo count: %s | idx: %s | components: %s", i+1, idx, cc)
+                    component_size = frozenset([len(c) for c in components])
+                    component_sizes[component_size] += 1
+                    count += 1
+                    continue
+                connected.append(remove_nodes)
+            logger.info("Taboo count %s finished: %s", i+1, count)
+            #logger.info(component_sizes.items())
+            self.current_branch = connected
+            new_branch = self.create_new_branch(i+2, disconnected)
+        #logger.info("End: %s", list(self.graph.edges))
