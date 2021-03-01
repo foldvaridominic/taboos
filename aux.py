@@ -153,30 +153,16 @@ class TabooTree:
         self.num_states = alphabet**length
         self.check_connected()
 
-
     def create_new_branch(self, length, skip):
-        return [set(c) for c in combinations(self.graph_nodes, length) if not any(s <= set(c) for s in skip)]
-
-    def _create_new_branch(self):
-        new_branch = set()
-        for node in self.current_branch:
-            neighbours = self.get_neighbours(node)
-            new_branch.update(set(map(lambda x: x[1] | x[0], direct_product(([node], neighbours)))))
-        #logger.info("New branch: %s", new_branch)
-        return new_branch
-
-    def get_neighbours(self, tree_node):
-        t_node = list(tree_node)
-        size = len(tree_node)
-        candidates = [frozenset(t_node[:idx] + [n] + t_node[idx+1:]) for n in self.graph_nodes for idx in range(size)]
-        return {c for c in candidates if c in self.current_branch and c != tree_node}
+        for c in combinations(self.graph_nodes, length):
+            if not any(s <= set(c) for s in skip):
+                yield set(c)
 
     def check_connected(self):
         new_branch = self.current_branch
         disconnected = []
         for i in range(self.num_states-1):
             # node in the TabooTree is a collection of nodes to be removed from the Hamming-graph
-            connected = []
             component_sizes = defaultdict(int)
             count = 0
             for idx, remove_nodes in enumerate(new_branch, 1):
@@ -191,14 +177,11 @@ class TabooTree:
                 self.graph.add_edges_from(remove_edges)
                 if cc > 1:
                     disconnected.append(remove_nodes)
-                    #logger.info("Taboo count: %s | idx: %s | components: %s", i+1, idx, cc)
                     component_size = frozenset([len(c) for c in components])
+                    #logger.info("Taboo count: %s | idx: %s | components: %s", i+1, idx, component_size)
                     component_sizes[component_size] += 1
                     count += 1
-                    continue
-                connected.append(remove_nodes)
             logger.info("Taboo count %s finished: %s", i+1, count)
-            #logger.info(component_sizes.items())
-            self.current_branch = connected
+            logger.info(component_sizes.items())
             new_branch = self.create_new_branch(i+2, disconnected)
         #logger.info("End: %s", list(self.graph.edges))
