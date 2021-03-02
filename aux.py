@@ -17,6 +17,7 @@ logger.addHandler(ch)
 from constants import NUCLEOTIDE_CHARACTERS, ALPHABET_LENGTH
 from tabooset import TabooSet as TS
 from utils import *
+from plot import DrawCube
 
 
 letters = set(NUCLEOTIDE_CHARACTERS)
@@ -151,6 +152,7 @@ class TabooTree:
         self.current_branch = current_branch
         self.graph_nodes = nodes
         self.num_states = alphabet**length
+        self.draw_cube = DrawCube(alphabet,length)
         self.check_connected()
 
     def create_new_branch(self, length, skip):
@@ -181,6 +183,8 @@ class TabooTree:
                     #logger.info("Taboo count: %s | idx: %s | components: %s", i+1, idx, component_size)
                     component_sizes[component_size] += 1
                     count += 1
+                    if self.num_states == 16:
+                        self.draw_cube.create_fig_with_projections(remove_nodes, f'{i+1}_{count}')
             logger.info("Taboo count %s finished: %s", i+1, count)
             logger.info(component_sizes.items())
             new_branch = self.create_new_branch(i+2, disconnected)
