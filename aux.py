@@ -24,6 +24,7 @@ letters = set(NUCLEOTIDE_CHARACTERS)
 max_letters = ALPHABET_LENGTH
 allowed = []
 
+
 def rec_func(length):
     global allowed
     for r in range(1,max_letters + 1):
@@ -33,6 +34,22 @@ def rec_func(length):
         else:
             yield allowed
         allowed = allowed[:-1]
+
+
+def gen_hamming_graph(taboos, length):
+        ts = TS(taboos, complement=False, skip=False)
+        ts.graph.clear()
+        nodes = ts.gen_nodes_with_length(length)
+        edges = combinations(nodes, 2)
+        edges = [p for p in edges if hamming_distance_1_for_strings(p)]
+        ts.graph.add_nodes_from(nodes)
+        ts.graph.add_edges_from(edges)
+        cc = list(nx.algorithms.components.connected_components(ts.graph))
+        blocks = [len(c) for c in cc]
+        #logger.info("Connected components: %s", cc)
+        #logger.info("Size of connected components: %s", blocks)
+        logger.info("Number of connected components: %s", len(blocks))
+        return blocks
 
 
 def enum_graphs(length):
@@ -45,7 +62,7 @@ def enum_graphs(length):
             taboos += [to_string(s) for s in direct_product(allowed[:idx] + [not_allowed[idx]] + allowed[idx+1:])]
         structure = tuple([len(a) for a in allowed])
         logger.info("Taboo blocks: %s", structure)
-        blocks = TS.gen_hamming_graph(taboos, length)
+        blocks = gen_hamming_graph(taboos, length)
         if len(blocks) > 1:
             block = frozenset(Counter(blocks).items())
             all_blocks.add(block)
@@ -82,7 +99,7 @@ def increase_dimension(characters, increase=4):
     structure = tuple([len(c) for c in characters])
     logger.info("Taboo blocks: %s", structure)
     for jdx in range(increase):
-        blocks = TS.gen_hamming_graph(taboos, idx+1+jdx)
+        blocks = gen_hamming_graph(taboos, idx+1+jdx)
     return
 
 

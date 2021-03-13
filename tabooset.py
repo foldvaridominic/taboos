@@ -10,17 +10,31 @@ logger = logging.getLogger()
 
 
 class TabooSet:
-    def __init__(self, taboos, complement=True, skip=True):
+    '''
+    Check if Hamming-graph (n,4) is connected for all n with a certain taboo set.
+    '''
+
+    def __init__(self, taboos, complement=True, ignore_first_check=False):
+        '''
+        :param taboos: list of nucleotide seqs, wild card characters allowed
+            Example: taboos = [GCTNS, AKYAGTB, TCCC]
+        :param complement: boolean to consider complementary strands as well
+        :param ignore_first_check: boolean to ignore first connectivity check
+        '''
+
         logger.info("taboo init data: %s", taboos)
+
+        # check if the whole alphabet is used as the first character
         first_last_letters = set()
         for t in taboos:
             first_last_letters.add(ALL_CHARACTERS.get(t[0]))
             first_last_letters.add(NUCLEOTIDE_COMPLEMENTS.get(t[-1]))
         first_last_letters = set(flatten([l for l in first_last_letters if l]))
         #logger.debug("first and last: %s", first_last_letters)
+
         self.taboo_init_counts = len(first_last_letters)
         self.taboo_strings = taboos
-        if self.taboo_init_counts >= ALPHABET_LENGTH or not skip:
+        if not self.connected_1 or ignore_first_check:
             taboo_tuples = self.transform(taboos)
             taboo_regexes = self.transform(taboos, regex=True)
             #logger.debug("transformed taboos: %s", taboo_regexes)
@@ -34,10 +48,13 @@ class TabooSet:
             self.minimize()
             self.max_taboo_length = max(map(len, self.taboos)) if self.taboos else 1
             self.min_taboo_length = min(map(len, self.taboos)) if self.taboos else 1
-            self.nodes = dict()
+            self._nodes = dict()
             self.graph = nx.Graph()
 
     def transform(self, taboos, regex=False):
+        '''
+        Parse the raw input nucleotide sequences.
+        '''
         ret = set()
         for t in taboos:
             new = self.generate_chars(t, regex=regex)
@@ -56,6 +73,13 @@ class TabooSet:
         pass
 
     def generate_chars(self, taboo_string, regex=False):
+        '''
+        Parse a taboo sequence. Return a tuple where each element is
+            regex=False: a tuple made from either a single valid nucleotide or 
+                         a set nucleotides in case it is a wildcard character
+            regex=True: a single valid nucleotide or a regular expression.
+        When a character cannot be parsed ignore it.
+        '''
         if regex:
             chars =  [l if l in NUCLEOTIDE_CHARACTERS 
                 else SPECIAL_CHARACTERS_REGEX.get(l)
@@ -102,6 +126,7 @@ class TabooSet:
 
     @property
     def connected_2(self):
+        # Cut the first character from each taboo string
         sorted_taboos = set(sorted(
             [t[1:] for t in self.taboos
             if self.taboo_free(t[1:])],
@@ -135,7 +160,6 @@ class TabooSet:
                             logger.debug("pair %s and %s cannot be left-1 synchronized",
                                 product1_str, product2_str)
                             no_left_sync.append((product1_str, product2_str))
-                            #return False
         if no_left_sync:
             return False
         return True
@@ -143,7 +167,7 @@ class TabooSet:
     def connected_3(self):
         self.gen_nodes_with_length()
         self.gen_suffix_classifiers()
-        #logger.debug(self.nodes)
+        #logger.debug(self._nodes)
         logger.debug("Taboo strings: %s", self.taboo_strings)
         logger.debug("LSC: %s", self.long_suffix_classifiers)
         logger.debug("SSC: %s", self.short_suffix_classifiers)
@@ -157,10 +181,11 @@ class TabooSet:
             partition_length = max(self.min_lsc - p_length, 1)
             break_ = False
             while partition_length <= self.max_taboo_length - p_length:
-                prefixes = self.gen_prefixes(length=partition_length)
+                prefixes = self.get_nodes(partition_length)
                 prefixes_filtered = [pf for pf in prefixes 
-                    if self.taboo_free(to_string(pf)+p)]
-                if all(any((to_string(pf)+p).startswith(l)
+                    if self.taboo_free(pf+p)]
+                # all possible prefix + ssc concat have to start with an lsc
+                if all(any((pf+p).startswith(l)
                     for l in self.long_suffix_classifiers)
                     for pf in prefixes_filtered):
                     break
@@ -172,18 +197,22 @@ class TabooSet:
                     partition_length=partition_length):
                 return False
             for length in range(p_length+2, p_length + partition_length):
-                initial_nodes = self.nodes.get(length)
+                initial_nodes = self._nodes.get(length)
                 if not initial_nodes:
                     continue
                 if not self.gen_suffix_graph(p, length, nodes=initial_nodes):
                     return False
         return True
 
-    @staticmethod
-    def get_initial_nodes(starting_point):
-        return get_self_product(NUCLEOTIDE_CHARACTERS, starting_point)
+    def get_initial_nodes(self, starting_point):
+        return self.get_nodes(starting_point)
 
     def gen_nodes_with_length(self, length=None):
+        '''
+        :param length: integer
+        :return: list of strings constructed as all taboo avoiding
+                 character combinations up to length
+        '''
         starting_point = self.min_taboo_length - 1
         length = length or self.max_taboo_length + 1
         current_nodes = self.get_initial_nodes(starting_point)
@@ -191,10 +220,16 @@ class TabooSet:
             current_nodes = self.extend_nodes(current_nodes)
             starting_point += 1
             logger.debug("extending nodes to length %s", starting_point)
-            self.nodes[starting_point] = current_nodes
+            # cache nodes
+            self._nodes[starting_point] = current_nodes
         return current_nodes
 
     def extend_nodes(self, current_nodes):
+        '''
+        :param current_nodes: list of strings
+        :return: list of strings constructed as taboo avoiding left extension
+                 of current nodes by all nucleotides
+        '''
         ret = []
         try:
             M_length = len(current_nodes[0]) == self.max_taboo_length
@@ -202,20 +237,21 @@ class TabooSet:
             # initial nodes is a generator
             M_length = False
         for node in current_nodes:
-            ext = [NUCLEOTIDE_CHARACTERS[idx] + to_string(node)
+            ext = [NUCLEOTIDE_CHARACTERS[idx] + node
             for idx in range(ALPHABET_LENGTH)
-            if self.taboo_free(NUCLEOTIDE_CHARACTERS[idx] + to_string(node))]
-            if M_length and not ext: 
-                logger.info("Not a left proper taboo set: %s", str(node))
+            if self.taboo_free(NUCLEOTIDE_CHARACTERS[idx] + node)]
+            if M_length and not ext:
+                logger.info("Not a left proper taboo set: %s", node)
             ret += ext
         return ret
 
     def gen_suffix_classifiers(self):
-        M_length_nodes = self.nodes[self.max_taboo_length]
+        M_length_nodes = self.get_nodes(self.max_taboo_length)
         # XXX memory hotspot
         taboo_suffixes = set([to_string(p[idx::]) for t in self.taboos 
             for p in direct_product(t) for idx in range(len(p),0,-1)])
-        M_suffixes = set([tf[idx::] for tf in M_length_nodes for idx in range(len(tf),0,-1) ])
+        M_suffixes = set([tf[idx::] for tf in M_length_nodes for idx in range(len(tf),0,-1)])
+        # suffix classifiers have to be suffixes of M-length taboo free strings
         scs = taboo_suffixes.intersection(M_suffixes)
         lscs = set()
         for node in M_length_nodes:
@@ -229,37 +265,51 @@ class TabooSet:
         self.min_lsc = min(len(l) for l in lscs)
         return lscs, sscs
 
-    def gen_prefixes(self, length=None): 
+    def get_nodes(self, length=None): 
+        '''
+        :param length: integer
+        :return: list or generator of taboo free strings up to length
+        '''
         length = length or self.max_taboo_length - 1
-        prefixes = self.nodes.get(length) or \
-            get_self_product(NUCLEOTIDE_CHARACTERS, length)
-        return prefixes
+        ret = self._nodes.get(length) or \
+            (to_string(p) for p in get_self_product(NUCLEOTIDE_CHARACTERS, length))
+        return ret
 
     def gen_suffix_graph(self, suffix, node_length, nodes=None,
             quotient=False, partition_length=None):
+        '''
+        Generate suffix graph.
+        :param suffix: string
+        :param node_length: integer
+        :param nodes: list of strings
+        :param quotient: boolean to generate quotient graph
+        :param partition_length: integer, length of strings in quotient graph nodes
+        :return: boolean whether the graph is connected or not
+        '''
         self.graph.clear()
         if quotient:
             edges = []
             nodes = []
             # when node is represented as prefix + partition + suffix
             # both LSC and SSC have M-1 length prefixes
-            partitions = self.nodes.get(partition_length) or \
-                [to_string(p) for p in get_self_product(NUCLEOTIDE_CHARACTERS, partition_length)]
-            prefixes = self.gen_prefixes()
+            partitions = list(self.get_nodes(partition_length))
+            prefixes = self.get_nodes()
             for i1, p1 in enumerate(partitions, 1):
-                if not any(self.taboo_free(to_string(prefix)+p1+suffix) for prefix in prefixes):
+                p1_suffix = p1 + suffix
+                if not any(self.taboo_free(prefix+p1_suffix) for prefix in prefixes):
                     # reset generator 
-                    prefixes = self.gen_prefixes()
+                    prefixes = self.get_nodes()
                     continue
                 nodes.append(p1)
                 for p2 in partitions[i1:]:
+                    p2_suffix = p2 + suffix
                     if not hamming_distance_1_for_strings((p1,p2)):
                         continue
-                    if any(self.taboo_free(to_string(prefix)+p1+suffix) and
-                        self.taboo_free(to_string(prefix)+p2+suffix) for prefix in prefixes):
+                    if any(self.taboo_free(prefix+p1_suffix) and
+                        self.taboo_free(prefix+p2_suffix) for prefix in prefixes):
                         edges.append((p1, p2))
                     # reset generator 
-                    prefixes = self.gen_prefixes()
+                    prefixes = self.get_nodes()
         else:
             nodes = [n for n in nodes if n.endswith(suffix)]
             edges = combinations(nodes, 2)
@@ -269,25 +319,9 @@ class TabooSet:
         cc = nx.algorithms.components.number_connected_components(self.graph)
         logger.info(
             "Connected components of %s suffix graph %s with length %s: %s",
-            'quotient ' + str(partition_length) if quotient else '', suffix, node_length, cc
+            'quotient ' + str(partition_length) if quotient else '', 
+            suffix, node_length, cc
             )
         if cc > 1:
             logger.info(list(nx.algorithms.components.connected_components(self.graph)))
         return cc == 1
-
-    # for testing purposes
-    @classmethod
-    def gen_hamming_graph(cls, taboos, length):
-        ts = cls(taboos, complement=False, skip=False)
-        ts.graph.clear()
-        nodes = ts.gen_nodes_with_length(length)
-        edges = combinations(nodes, 2)
-        edges = [p for p in edges if hamming_distance_1_for_strings(p)]
-        ts.graph.add_nodes_from(nodes)
-        ts.graph.add_edges_from(edges)
-        cc = list(nx.algorithms.components.connected_components(ts.graph))
-        blocks = [len(c) for c in cc]
-        #logger.info("Connected components: %s", cc)
-        #logger.info("Size of connected components: %s", blocks)
-        logger.info("Number of connected components: %s", len(blocks))
-        return blocks
