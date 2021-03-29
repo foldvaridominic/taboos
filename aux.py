@@ -169,7 +169,7 @@ class TabooTree:
         self.current_branch = current_branch
         self.graph_nodes = nodes
         self.num_states = alphabet**length
-        self.draw_cube = DrawCube(alphabet,length)
+        self.draw_cube = DrawCube(alphabet, length)
         self.check_connected()
 
     def create_new_branch(self, length, skip):
@@ -183,6 +183,7 @@ class TabooTree:
         for i in range(self.num_states-1):
             # node in the TabooTree is a collection of nodes to be removed from the Hamming-graph
             component_sizes = defaultdict(int)
+            cross_section_types = defaultdict(int)
             count = 0
             for idx, remove_nodes in enumerate(new_branch, 1):
                 remove_edges = list(flatten([list(self.graph.edges(n)) for n in remove_nodes]))
@@ -201,8 +202,13 @@ class TabooTree:
                     component_sizes[component_size] += 1
                     count += 1
                     if self.num_states == 16:
-                        self.draw_cube.create_fig_with_projections(remove_nodes, f'{i+1}_{count}')
+                        cst = self.draw_cube.create_fig_with_projections(remove_nodes, f'{i+1}_{count}')
+                        # resize and regroup
+                        cst = frozenset(Counter([frozenset((cst[k],cst[k+1])) for k in range(0, len(cst), 2)]).items())
+                        cross_section_types[cst] += 1
             logger.info("Taboo count %s finished: %s", i+1, count)
             logger.info(component_sizes.items())
+            for cst, count in cross_section_types.items():
+                logger.info("%s: %s", cst, count)
             new_branch = self.create_new_branch(i+2, disconnected)
         #logger.info("End: %s", list(self.graph.edges))
