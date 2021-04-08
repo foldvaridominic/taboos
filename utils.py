@@ -2,6 +2,10 @@ import itertools
 import re
 
 
+def permutations(iterable):
+    return itertools.permutations(iterable)
+
+
 def flatten(iterable):
     return itertools.chain.from_iterable(iterable)
 
@@ -45,3 +49,13 @@ def taboo_free_for_tuples(word, taboos):
 
 def match_from_start(pattern, word):
     return re.match(pattern, word)
+
+
+class Mirrors:
+
+    def __init__(self, iterable, reps):
+        self.iterable = iterable
+        self.reps = reps
+
+    def generate(self):
+        return get_self_product(self.iterable, self.reps)
