@@ -49,6 +49,8 @@ class HyperCubeGraph:
         self.size_orbit_map = {}
         self.components = {}
         self.parents = {}
+        self.taboo_count_sums = defaultdict(list)
+        self.index_map = defaultdict(list)
 
 
     def disconnect(self, taboos):
@@ -59,13 +61,17 @@ class HyperCubeGraph:
         self.graph.remove_edges_from(remove_edges)
         self.graph.remove_nodes_from(remove_nodes)
         cc = nx.algorithms.components.number_connected_components(self.graph)
+        components = nx.algorithms.components.connected_components(self.graph)
         if cc == 1:
+            self.graph.add_edges_from(remove_edges)
             return False
-        components = list(nx.algorithms.components.connected_components(self.graph))
-        component_sizes = tuple(sorted(len(c) for c in components))
+        components = sorted(components, key=lambda x: len(x))
+        component_sizes = [len(c) for c in components]
+        if not cc == 2:
+            print(f"Taboos: {taboos}  |  Components: {components}  |  Sizes: {component_sizes}")
+            assert False, \
+            f"Number of connected components is {cc}"
         self.graph.add_edges_from(remove_edges)
-        assert cc == 2, f"Number of connected components is {cc}"
-        #print(f"Taboos: {taboos}  |  Components: {cc}  |  Sizes: {component_sizes}")
         return component_sizes, components
 
 
@@ -77,9 +83,10 @@ class HyperCubeGraph:
                 print(f"Orbit {self.orbit_map[taboos]} already generated")
                 return False
             disconnect = self.disconnect(taboos)
+            taboo_count = len(taboos)
             if idx == 1 and disconnect:
                 component_sizes, components = disconnect 
-                self.size_orbit_map[orbit_idx] = component_sizes
+                self.size_orbit_map[orbit_idx] = tuple(component_sizes + [taboo_count])
             elif disconnect:
                 sizes, components = disconnect
                 assert component_sizes == sizes, \
@@ -88,32 +95,78 @@ class HyperCubeGraph:
                 return False
             self.orbit_map[taboos] = orbit_idx
             self.components[taboos] = components
-        print(f"{orbit_idx}. Orbit size: {idx} | Components: {component_sizes}")
+        print(f"{orbit_idx}. Orbit size: {idx} | Components: {component_sizes} | Taboo count: {taboo_count}")
         return True
+
+    def _generate_taboo_count_sums(self):
+        for taboos, idx in self.orbit_map.items():
+            self.index_map[idx].append(taboos)
+        for orbit_idx, (c1, c2, t_count) in self.size_orbit_map.items():
+            sum_taboo_count = t_count + c1
+            self.taboo_count_sums[sum_taboo_count].append((1, orbit_idx, 0))
+            sum_taboo_count = t_count + c2
+            self.taboo_count_sums[sum_taboo_count].append((1, orbit_idx, 1))
+        for (orbit_idx_1, (c1_1, c2_1, t_count_1)), (orbit_idx_2, (c1_2, c2_2, t_count_2)) \
+            in combinations_with_replacement(self.size_orbit_map.items(), 2):
+            sum_taboo_count = t_count_1 + t_count_2
+            self.taboo_count_sums[sum_taboo_count].append((0, orbit_idx_1, orbit_idx_2))
 
     def extend(self):
         hc = self.__class__(self.n+1)
-        index_map = defaultdict(list)
-        for taboos, idx in self.orbit_map.items():
-            index_map[idx].append(taboos)
-        for orbit_idx, taboos_list in index_map.items():
-            for taboos in taboos_list:
-                for c_idx, c in enumerate(self.components[taboos], 1):
-                    next_taboos = [tuple(list(t) + [0]) for t in taboos]
-                    next_taboos += [tuple(list(t) + [1]) for t in c]
-                    next_taboos = frozenset(next_taboos)
-                    dc = hc.explore(next_taboos)
-                    next_orbit_idx = hc.orbit_map[next_taboos]
-                    hc.parents[next_orbit_idx] = (orbit_idx, c_idx)
-        for t1, t2 in combinations_with_replacement(self.orbit_map.keys(), 2):
-            next_taboos = [tuple(list(t) + [0]) for t in t1]
-            next_taboos += [tuple(list(t) + [1]) for t in t2]
-            next_taboos = frozenset(next_taboos)
-            dc = hc.explore(next_taboos)
-            if not dc:
+        self._generate_taboo_count_sums()
+        for taboo_count in range(self.n+1, 2**(self.n) + 1):
+            patterns = self.taboo_count_sums.get(taboo_count)
+            if not patterns:
                 continue
-            next_orbit_idx = hc.orbit_map[next_taboos]
-            t1_idx = self.orbit_map[t1]
-            t2_idx = self.orbit_map[t2]
-            hc.parents[next_orbit_idx] = (t1_idx, t2_idx, int(t1 == t2))
+            for pattern in patterns: 
+                if pattern[0] == 1:
+                    orbit_idx = pattern[1]
+                    comp_idx = pattern[2]
+                    taboos_list = self.index_map[orbit_idx]
+                    # cannot be connected
+                    #connected_count = 0
+                    extension_count = 0
+                    for t_idx, taboos in enumerate(taboos_list, 1):
+                        component = self.components[taboos][comp_idx]
+                        next_taboos = [tuple(list(t) + [0]) for t in taboos]
+                        next_taboos += [tuple(list(t) + [1]) for t in component]
+                        next_taboos = frozenset(next_taboos)
+                        if any(t.issubset(next_taboos) for t in hc.orbit_map):
+                            extension_count += 1
+                            continue
+                        dc = hc.explore(next_taboos)
+                        next_orbit_idx = hc.orbit_map[next_taboos]
+                        hc.parents[next_orbit_idx] = (orbit_idx, comp_idx)
+                    print(f"Pattern: {pattern} | Total: {t_idx}  |  Extension count: {extension_count}")
+                if pattern[0] == 0:
+                    orbit_idx_1 = pattern[1]
+                    orbit_idx_2 = pattern[2]
+                    taboos_list_1 = self.index_map[orbit_idx_1]
+                    if orbit_idx_1 == orbit_idx_2:
+                        products = combinations_with_replacement(taboos_list_1, 2)
+                    else:
+                        taboos_list_2 = self.index_map[orbit_idx_2]
+                        products = direct_product([taboos_list_1, taboos_list_2])
+                    connected_count = 0
+                    extension_count = 0
+                    for t_idx, (taboos_1, taboos_2) in enumerate(products, 1):
+                        next_taboos = [tuple(list(t) + [0]) for t in taboos_1]
+                        next_taboos += [tuple(list(t) + [1]) for t in taboos_2]
+                        next_taboos = frozenset(next_taboos)
+                        # prefilter 1: extension
+                        if any(t.issubset(next_taboos) for t in hc.orbit_map):
+                            extension_count += 1
+                            continue
+                        # prefilter 2: connected
+                        if any(all(c1.intersection(c2) 
+                            for c2 in self.components[taboos_2])
+                            for c1 in self.components[taboos_1]):
+                            connected_count += 1
+                            continue
+                        dc = hc.explore(next_taboos)
+                        assert dc
+                        next_orbit_idx = hc.orbit_map[next_taboos]
+                        hc.parents[next_orbit_idx] = \
+                            (orbit_idx_1, orbit_idx_2, int(taboos_1 == taboos_2))
+                    print(f"Pattern: {pattern} | Total: {t_idx}  |  Connected count: {connected_count}  |  Extension count: {extension_count}")
         return hc
