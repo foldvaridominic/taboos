@@ -47,8 +47,11 @@ class DrawCube:
                 labels=self.node_labels, font_color='yellow')
             dummy_graph = nx.hypercube_graph(3)
             dummy_graph.remove_nodes_from(group)
-            taboo_edges = [[(n1, n2) for n1, n2 in self.graph.edges(n) if n1 not in group or n2 not in group]
-                for n in list(self.graph) if n in group]
+            taboo_edges = [[e for e in direct_product([list(dummy_graph.nodes), [n]])
+                          if hamming_distance_1_for_strings(e)]
+                          for n in group]
+            #taboo_edges = [[(n1, n2) for n1, n2 in self.graph.edges(n) if n1 not in group or n2 not in group]
+            #    for n in list(self.graph) if n in group]
             cc = nx.algorithms.components.number_connected_components(dummy_graph)
             if cc > 1:
                 minimal = True
