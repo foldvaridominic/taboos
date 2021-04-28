@@ -1,4 +1,5 @@
 from collections import defaultdict
+import time
 
 import networkx as nx
 from sympy.combinatorics.named_groups import SymmetricGroup as SG
@@ -112,12 +113,14 @@ class HyperCubeGraph:
             self.taboo_count_sums[sum_taboo_count].append((0, orbit_idx_1, orbit_idx_2))
 
     def extend(self):
+        start_time = time.time()
         hc = self.__class__(self.n+1)
         self._generate_taboo_count_sums()
         for taboo_count in range(self.n+1, 2**(self.n) + 1):
             patterns = self.taboo_count_sums.get(taboo_count)
             if not patterns:
                 continue
+            patterns = sorted(patterns, key=lambda t: t[0])
             for pattern in patterns: 
                 if pattern[0] == 1:
                     orbit_idx = pattern[1]
@@ -169,4 +172,6 @@ class HyperCubeGraph:
                         hc.parents[next_orbit_idx] = \
                             (orbit_idx_1, orbit_idx_2, int(taboos_1 == taboos_2))
                     print(f"Pattern: {pattern} | Total: {t_idx}  |  Connected count: {connected_count}  |  Extension count: {extension_count}")
+        finished = time.time() - start_time
+        print(f"Finished in: {finished} s")
         return hc
