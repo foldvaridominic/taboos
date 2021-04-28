@@ -1,5 +1,5 @@
-from collections import defaultdict
 import time
+from collections import defaultdict, Counter
 
 import networkx as nx
 from sympy.combinatorics.named_groups import SymmetricGroup as SG
@@ -175,3 +175,45 @@ class HyperCubeGraph:
         finished = time.time() - start_time
         print(f"Finished in: {finished} s")
         return hc
+
+    def create_projections(self): 
+        orbit_projection_map = {}
+        coord_indices = list(range(self.n))
+        cross_section_map = defaultdict(set)
+        for idx, (taboos, orbit_idx) in enumerate(self.orbit_map.items(), 1):
+            if not idx % 1000: 
+                print(f"Progress: {idx}")
+            cst = []
+            for fixed in coord_indices:
+                projection = [i for i in range(self.n) if i != fixed]
+                for a in range(2):
+                    projected_taboos = [tuple(t[i] for i in projection) for t in taboos if t[fixed] == a]
+                    dummy_graph = nx.Graph()
+                    dummy_nodes = list(get_self_product(range(2), self.n-1))
+                    dummy_graph.add_nodes_from(dummy_nodes)
+                    dummy_edges = combinations(dummy_nodes, 2)
+                    dummy_edges = [e for e in dummy_edges if hamming_distance_1_for_strings(e)]
+                    dummy_graph.add_edges_from(dummy_edges)
+                    dummy_graph.remove_nodes_from(projected_taboos)
+                    taboo_edges = [[e for e in direct_product([list(dummy_graph.nodes), [n]])
+                          if hamming_distance_1_for_strings(e)]
+                          for n in projected_taboos]
+                    cc = nx.algorithms.components.number_connected_components(dummy_graph)
+                    if cc > 1:
+                        minimal = True
+                        for te in taboo_edges:
+                            dg = dummy_graph.copy()
+                            dg.add_edges_from(te)
+                            if nx.algorithms.components.number_connected_components(dg) > 1:
+                                minimal = False
+                                break
+                        if minimal:
+                            cst.append("MC")
+                        else:
+                            cst.append("DC")
+                    else:
+                        cst.append("C")
+            cst = frozenset(Counter([frozenset((cst[k],cst[k+1])) for k in range(0, len(cst), 2)]).items())
+            cross_section_map[orbit_idx].add(cst)
+        for orbit_idx, cross_section_types in cross_section_map.items():
+            print(f"Orbit: {orbit_idx} | {cross_section_types}")
