@@ -20,56 +20,101 @@ from utils import *
 from plot import DrawCube
 
 
-letters = set(NUCLEOTIDE_CHARACTERS)
-max_letters = ALPHABET_LENGTH
+nucleotides = set(NUCLEOTIDE_CHARACTERS)
 allowed = []
 
 
-def rec_func(length):
+def rec_func(length, letters=nucleotides):
     global allowed
-    for r in range(1,max_letters + 1):
+    for r in range(1,len(letters) + 1):
         allowed.append(set(random.sample(letters, r)))
         if length > 1:
-            yield from rec_func(length-1)
+            yield from rec_func(length-1, letters)
         else:
             yield allowed
         allowed = allowed[:-1]
 
 
-def gen_hamming_graph(taboos, length):
-        ts = TS(taboos, complement=False, skip=False)
-        ts.graph.clear()
-        nodes = ts.gen_nodes_with_length(length)
+def gen_hamming_graph(taboos, length, letters=nucleotides):
+        graph = nx.Graph()
+        nodes = list(get_self_product(letters, length))
         edges = combinations(nodes, 2)
-        edges = [p for p in edges if hamming_distance_1_for_strings(p)]
-        ts.graph.add_nodes_from(nodes)
-        ts.graph.add_edges_from(edges)
-        cc = list(nx.algorithms.components.connected_components(ts.graph))
+        edges = [e for e in edges if hamming_distance_1_for_strings(e)]
+        graph.add_nodes_from(nodes)
+        graph.add_edges_from(edges)
+        graph.remove_nodes_from(taboos)
+        cc = list(nx.algorithms.components.connected_components(graph))
         blocks = [len(c) for c in cc]
-        #logger.info("Connected components: %s", cc)
-        #logger.info("Size of connected components: %s", blocks)
-        logger.info("Number of connected components: %s", len(blocks))
+        #print(f"Connected components: {cc}")
+        print(f"Size of connected components: {blocks}")
+        print(f"Number of connected components: {len(blocks)}")
         return blocks
 
 
-def enum_graphs(length):
-    all_blocks = set()
+def create_projections(taboos, length, letters=nucleotides):
+    cst = []
+    alphabet = len(letters)
+    for fixed in range(length):
+        projection = [i for i in range(length) if i != fixed]
+        for a in letters:
+            projected_taboos = [tuple(t[i] for i in projection) 
+                for t in taboos if t[fixed] == a]
+            dummy_graph = nx.Graph()
+            dummy_nodes = list(get_self_product(letters, length-1))
+            dummy_graph.add_nodes_from(dummy_nodes)
+            dummy_edges = combinations(dummy_nodes, 2)
+            dummy_edges = [e for e in dummy_edges if hamming_distance_1_for_strings(e)]
+            dummy_graph.add_edges_from(dummy_edges)
+            dummy_graph.remove_nodes_from(projected_taboos)
+            taboo_edges = [[e for e in direct_product([list(dummy_graph.nodes), [n]])
+                      if hamming_distance_1_for_strings(e)]
+                      for n in projected_taboos]
+            cc = nx.algorithms.components.number_connected_components(dummy_graph)
+            if cc > 1:
+                minimal = True
+                for te in taboo_edges:
+                    dg = dummy_graph.copy()
+                    dg.add_edges_from(te)
+                    if nx.algorithms.components.number_connected_components(dg) > 1:
+                            minimal = False
+                            break
+                if minimal:
+                    cst.append("MC")
+                else:
+                    cst.append("DC")
+            else:
+                cst.append("C")
+    cst = frozenset(Counter([frozenset(Counter([cst[k+i] for i in range(alphabet)]).items()) for k in range(0, len(cst), alphabet)]).items())
+    return cst
+
+
+
+def enum_graphs(length, alphabet=None):
+    letters = set(range(alphabet)) if alphabet else nucleotides
     all_structures = defaultdict(list)
-    for allowed in rec_func(length):
+    all_projections = defaultdict(list)
+    for allowed in rec_func(length, letters):
         not_allowed = [letters-pos for pos in allowed]
         taboos = []
         for idx in range(length):
-            taboos += [to_string(s) for s in direct_product(allowed[:idx] + [not_allowed[idx]] + allowed[idx+1:])]
+            taboos += [s for s in direct_product(
+                allowed[:idx] + [not_allowed[idx]] + allowed[idx+1:])]
         structure = tuple([len(a) for a in allowed])
-        logger.info("Taboo blocks: %s", structure)
-        blocks = gen_hamming_graph(taboos, length)
+        print(f"Taboo blocks: {structure}")
+        blocks = gen_hamming_graph(taboos, length, letters)
         if len(blocks) > 1:
             block = frozenset(Counter(blocks).items())
-            all_blocks.add(block)
+            cst = create_projections(taboos, length, letters)
             all_structures[block].append(structure)
-    logger.info("All different block structures: %s", all_blocks)
-    logger.info("Number of different block structures: %s", len(all_blocks))
-    #logger.info(all_structures)
+            all_projections[cst].append(structure)
+    print(f"Number of different block structures: {len(all_structures)}")
+    print(f"All different block structures")
+    for block, count in all_structures.items():
+        print(f"{block}: {count}")
+    print(f"Number of different proj structures: {len(all_projections)}")
+    print(f"All different proj structures")
+    for cst, count in all_projections.items():
+        print(f"{cst}: {count}")
 
 
 def sigma_minus(number, alphabet_length=4):
@@ -170,6 +215,8 @@ class TabooTree:
         self.graph_nodes = nodes
         self.num_states = alphabet**length
         self.draw_cube = DrawCube(alphabet, length)
+        self.n = length
+        self.alphabet = range(alphabet)
         self.check_connected()
 
     def create_new_branch(self, length, skip):
@@ -201,11 +248,13 @@ class TabooTree:
                     #logger.info("Taboo count: %s | idx: %s | components: %s", i+1, idx, component_size)
                     component_sizes[component_size] += 1
                     count += 1
-                    if self.num_states == 16:
-                        cst = self.draw_cube.create_fig_with_projections(remove_nodes, f'{i+1}_{count}')
+                    #if self.num_states == 16:
+                        #cst = self.draw_cube.create_fig_with_projections(remove_nodes, f'{i+1}_{count}')
                         # resize and regroup
-                        cst = frozenset(Counter([frozenset((cst[k],cst[k+1])) for k in range(0, len(cst), 2)]).items())
-                        cross_section_types[cst] += 1
+                        #cst = frozenset(Counter([frozenset((cst[k],cst[k+1])) for k in range(0, len(cst), 2)]).items())
+                        #cross_section_types[cst] += 1
+                    cst = create_projections(remove_nodes, self.n, self.alphabet)
+                    cross_section_types[cst] += 1
             logger.info("Taboo count %s finished: %s", i+1, count)
             logger.info(component_sizes.items())
             for cst, count in cross_section_types.items():
