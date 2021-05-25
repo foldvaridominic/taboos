@@ -201,7 +201,7 @@ def inspect_dimension_increment_in_quotient_graph(characters, increase=1):
 
 class TabooTree:
 
-    def __init__(self, alphabet, length):
+    def __init__(self, length, alphabet):
         nodes = list(get_self_product(range(alphabet), length))
         graph = nx.Graph()  
         graph.add_nodes_from(nodes)
