@@ -113,9 +113,13 @@ class HammingGraph:
     def extend(self):
         start_time = time.time()
         hc = self.__class__(self.n+1, self.q)
+        orbit_set = set()
         for taboos_1 in self.orbit_map:
             orbit_idx_1 = self.orbit_map[taboos_1]
+            if orbit_idx_1 in orbit_set:
+                continue
             components = self.components[taboos_1]
+            orbit_set.add(orbit_idx_1)
             extension_count = 0
             connected_count = 0
             new_orbit_count = 0
@@ -159,10 +163,10 @@ class HammingGraph:
             cst = []
             for fixed in coord_indices:
                 projection = [i for i in range(self.n) if i != fixed]
-                for a in range(2):
+                for a in range(self.q):
                     projected_taboos = [tuple(t[i] for i in projection) for t in taboos if t[fixed] == a]
                     dummy_graph = nx.Graph()
-                    dummy_nodes = list(get_self_product(range(2), self.n-1))
+                    dummy_nodes = list(get_self_product(range(self.q), self.n-1))
                     dummy_graph.add_nodes_from(dummy_nodes)
                     dummy_edges = combinations(dummy_nodes, 2)
                     dummy_edges = [e for e in dummy_edges if hamming_distance_1_for_strings(e)]
@@ -186,7 +190,7 @@ class HammingGraph:
                             cst.append("DC")
                     else:
                         cst.append("C")
-            cst = frozenset(Counter([frozenset((cst[k],cst[k+1])) for k in range(0, len(cst), 2)]).items())
+            cst = frozenset(Counter([tuple(sorted(cst[k:k+3], key=lambda x: x[0])) for k in range(0, len(cst), self.q)]).items())
             cross_section_map[orbit_idx].add(cst)
         for orbit_idx, cross_section_types in cross_section_map.items():
             print(f"Orbit: {orbit_idx} | {cross_section_types}")
