@@ -145,7 +145,7 @@ class HammingGraph:
                         continue
                     already_orbit = hc.orbit_map.get(next_taboos)
                     if already_orbit:
-                        self.get_taboo_utils_by_subgraph(next_taboos, already_orbit)
+                        hc.get_taboo_utils_by_subgraph(next_taboos, already_orbit)
                         continue
                     dc = hc.explore(next_taboos)
                     # prefilter 2: connected
@@ -153,7 +153,7 @@ class HammingGraph:
                         connected_count +=1
                         continue
                     next_orbit_idx = hc.orbit_map[next_taboos]
-                    self.get_taboo_utils_by_subgraph(next_taboos, next_orbit_idx)
+                    hc.get_taboo_utils_by_subgraph(next_taboos, next_orbit_idx)
                     labels = self.get_projection(next_taboos, next_orbit_idx)
                     new_orbit_count += 1
                     orbit_idx_i = [self.orbit_map.get(taboos[i]) or
@@ -164,7 +164,7 @@ class HammingGraph:
             print(f"Pattern: {orbit_idx_1}: {taboos_1} | New orbit: {new_orbit_count} | Connected count: {connected_count} | Extension count: {extension_count}")
         finished = time.time() - start_time
         print(f"Finished in: {finished} s")
-        print(self.taboo_utils_by_subgraph)
+        print(hc.taboo_utils_by_subgraph)
         return hc
 
     def get_projection(self, taboos, orbit_idx=1, path='./projs/'):
@@ -199,15 +199,16 @@ class HammingGraph:
         sub_taboos = taboos_dict[0]
         for a in range(1, self.q):
             proj_taboos = taboos_dict[a]
-            taboo_utils = self.get_label_for_projection(proj_taboos, scan=sub_taboos)
+            taboo_utils = self.get_label_for_projection(proj_taboos,
+                scan=sub_taboos, idx=a, orig_taboos=taboos)
             labels.append(taboo_utils)
         labels = frozenset(labels)
         s.add(labels)
 
 
-    def get_label_for_projection(self, taboos, scan=None):
+    def get_label_for_projection(self, taboos, scan=None, idx=None, orig_taboos=None):
         dummy_graph = nx.Graph()
-        dummy_nodes = list(get_self_product(range(self.q), self.n))
+        dummy_nodes = list(get_self_product(range(self.q), self.n-1))
         dummy_graph.add_nodes_from(dummy_nodes)
         dummy_edges = combinations(dummy_nodes, 2)
         dummy_edges = [e for e in dummy_edges if hamming_distance_1_for_strings(e)]
@@ -219,12 +220,20 @@ class HammingGraph:
         cc = nx.algorithms.components.number_connected_components(dummy_graph)
         if scan:
             label = []
-            scan_components = self.components[frozenset(scan)]
             scan = sorted(scan)
-            components = nx.algorithms.components.connected_components(self.graph)
-            components = {frozenset(c): [bool(set(c).intersection(sc)) for sc in scan_components].index(True) for c in components}
+            orig_components = self.components[orig_taboos]
+            components = list(nx.algorithms.components.connected_components(dummy_graph))
+            components_ext = [[tuple(list(cc) + [idx]) for cc in c] for c in components]
+            try:
+                components = {frozenset(c): [bool(set(ce).intersection(oc)) for oc in orig_components].index(True)
+                for c, ce in zip(components, components_ext)}
+            except ValueError:
+                print(components_ext)
+                print(orig_components)
+                raise ValueError
             for t in scan:
-                cidx = [value for key,value in components.items() if t in key][0]
+                cidx = [value for key,value in components.items() if t in key]
+                cidx = cidx[0] if cidx else ''
                 label.append(cidx)
             label = tuple(label)
             return label
