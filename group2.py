@@ -129,6 +129,7 @@ class HammingGraph:
             extension_count = 0
             connected_count = 0
             new_orbit_count = 0
+            ref_components = self.components[taboos_1]
             for c in sorted(
                 combinations_with_replacement(range(1,self.num_states+1),self.q-1),
                 key=lambda x: sum(x)):
@@ -145,7 +146,8 @@ class HammingGraph:
                         continue
                     already_orbit = hc.orbit_map.get(next_taboos)
                     if already_orbit:
-                        hc.get_taboo_utils_by_subgraph(next_taboos, already_orbit)
+                        hc.get_taboo_utils_by_subgraph(next_taboos, already_orbit, ref_components)
+                        print(hc.taboo_utils_by_subgraph[next_orbit_idx])
                         continue
                     dc = hc.explore(next_taboos)
                     # prefilter 2: connected
@@ -153,18 +155,20 @@ class HammingGraph:
                         connected_count +=1
                         continue
                     next_orbit_idx = hc.orbit_map[next_taboos]
-                    hc.get_taboo_utils_by_subgraph(next_taboos, next_orbit_idx)
                     labels = self.get_projection(next_taboos, next_orbit_idx)
                     new_orbit_count += 1
                     orbit_idx_i = [self.orbit_map.get(taboos[i]) or
                         self.components_reverse_map[taboos[i]] or ""
                         for i in range(self.q-1)]
                     hc.parents[next_orbit_idx] = (orbit_idx_1, orbit_idx_i)
+                    hc.get_taboo_utils_by_subgraph(next_taboos, next_orbit_idx, ref_components)
+                    print(hc.taboo_utils_by_subgraph[next_orbit_idx])
                     print(f"{labels} | {[orbit_idx_1] + orbit_idx_i}")
             print(f"Pattern: {orbit_idx_1}: {taboos_1} | New orbit: {new_orbit_count} | Connected count: {connected_count} | Extension count: {extension_count}")
         finished = time.time() - start_time
         print(f"Finished in: {finished} s")
-        print(hc.taboo_utils_by_subgraph)
+        for orbit, utils_ in hc.taboo_utils_by_subgraph.items():
+            print(f'{orbit}: {utils_}')
         return hc
 
     def get_projection(self, taboos, orbit_idx=1, path='./projs/'):
@@ -190,7 +194,7 @@ class HammingGraph:
         fig.savefig(path)
         return labels
 
-    def get_taboo_utils_by_subgraph(self, taboos, orbit_idx):
+    def get_taboo_utils_by_subgraph(self, taboos, orbit_idx, ref_components):
         s = self.taboo_utils_by_subgraph[orbit_idx]
         taboos_dict = defaultdict(list)
         for t in taboos:
@@ -200,13 +204,12 @@ class HammingGraph:
         for a in range(1, self.q):
             proj_taboos = taboos_dict[a]
             taboo_utils = self.get_label_for_projection(proj_taboos,
-                scan=sub_taboos, idx=a, orig_taboos=taboos)
+                scan=sub_taboos, idx=a, ref=ref_components, orig_taboos=taboos)
             labels.append(taboo_utils)
         labels = frozenset(labels)
         s.add(labels)
 
-
-    def get_label_for_projection(self, taboos, scan=None, idx=None, orig_taboos=None):
+    def get_label_for_projection(self, taboos, scan=None, idx=None, ref=None, orig_taboos=None):
         dummy_graph = nx.Graph()
         dummy_nodes = list(get_self_product(range(self.q), self.n-1))
         dummy_graph.add_nodes_from(dummy_nodes)
@@ -221,18 +224,18 @@ class HammingGraph:
         if scan:
             label = []
             scan = sorted(scan)
-            orig_components = self.components[orig_taboos]
             components = list(nx.algorithms.components.connected_components(dummy_graph))
             components_ext = [[tuple(list(cc) + [idx]) for cc in c] for c in components]
-            try:
-                components = {frozenset(c): [bool(set(ce).intersection(oc)) for oc in orig_components].index(True)
-                for c, ce in zip(components, components_ext)}
-            except ValueError:
-                print(components_ext)
-                print(orig_components)
-                raise ValueError
+            ref_ext = [[tuple(list(rc) + [0]) for rc in r] for r in ref]
+            orig_components = self.components[orig_taboos]
+            orig_components = sorted(orig_components,
+                    key=lambda x: [bool(set(re).intersection(x)) for re in ref_ext])
+            components_ordered = {}
+            for c, ce in zip(components, components_ext):
+                ordered =  [bool(set(ce).intersection(oc)) for oc in orig_components]
+                components_ordered[frozenset(c)] = ordered.index(True)
             for t in scan:
-                cidx = [value for key,value in components.items() if t in key]
+                cidx = [value for key,value in components_ordered.items() if t in key]
                 cidx = cidx[0] if cidx else ''
                 label.append(cidx)
             label = tuple(label)
