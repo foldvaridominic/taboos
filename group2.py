@@ -147,7 +147,6 @@ class HammingGraph:
                     already_orbit = hc.orbit_map.get(next_taboos)
                     if already_orbit:
                         hc.get_taboo_utils_by_subgraph(next_taboos, already_orbit, ref_components)
-                        print(hc.taboo_utils_by_subgraph[next_orbit_idx])
                         continue
                     dc = hc.explore(next_taboos)
                     # prefilter 2: connected
@@ -162,7 +161,6 @@ class HammingGraph:
                         for i in range(self.q-1)]
                     hc.parents[next_orbit_idx] = (orbit_idx_1, orbit_idx_i)
                     hc.get_taboo_utils_by_subgraph(next_taboos, next_orbit_idx, ref_components)
-                    print(hc.taboo_utils_by_subgraph[next_orbit_idx])
                     print(f"{labels} | {[orbit_idx_1] + orbit_idx_i}")
             print(f"Pattern: {orbit_idx_1}: {taboos_1} | New orbit: {new_orbit_count} | Connected count: {connected_count} | Extension count: {extension_count}")
         finished = time.time() - start_time
@@ -258,7 +256,7 @@ class HammingGraph:
                 label = "C"
             return label
 
-    def all_projections(self): 
+    def all_projections(self):
         orbit_projection_map = {}
         coord_indices = list(range(self.n))
         cross_section_map = defaultdict(set)
