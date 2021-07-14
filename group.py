@@ -140,7 +140,7 @@ class HyperCubeGraph:
                         dc = hc.explore(next_taboos)
                         next_orbit_idx = hc.orbit_map[next_taboos]
                         hc.parents[next_orbit_idx] = (orbit_idx, comp_idx)
-                    print(f"Pattern: {pattern} | Total: {t_idx}  |  Extension count: {extension_count}")
+                    #print(f"Pattern: {pattern} | Total: {t_idx}  |  Extension count: {extension_count}")
                 if pattern[0] == 0:
                     orbit_idx_1 = pattern[1]
                     orbit_idx_2 = pattern[2]
@@ -171,7 +171,7 @@ class HyperCubeGraph:
                         next_orbit_idx = hc.orbit_map[next_taboos]
                         hc.parents[next_orbit_idx] = \
                             (orbit_idx_1, orbit_idx_2, int(taboos_1 == taboos_2))
-                    print(f"Pattern: {pattern} | Total: {t_idx}  |  Connected count: {connected_count}  |  Extension count: {extension_count}")
+                    #print(f"Pattern: {pattern} | Total: {t_idx}  |  Connected count: {connected_count}  |  Extension count: {extension_count}")
         finished = time.time() - start_time
         print(f"Finished in: {finished} s")
         return hc
